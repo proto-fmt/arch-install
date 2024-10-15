@@ -1,50 +1,37 @@
 #!/bin/bash
 
-# Set variables
-DRIVE=/dev/sda
-EFI=1G
-SWAP=1G
-ROOT=10G
+# Ask user for disk device
+echo "Enter the disk device (e.g. /dev/sda):"
+read -r DISK_DEVICE
 
-# Calculate remaining space for /home
-TOTAL_SIZE=$(fdisk -s ${DRIVE})
-HOME=$((TOTAL_SIZE - EFI - SWAP - ROOT))
+# Set partition sizes
+SWAP_SIZE=8G
+ROOT_SIZE=40G
 
-# Ask user for confirmation
-echo "This script will erase all data on ${DRIVE} and create the following partitions:"
-echo "  - EFI: ${EFI}"
-echo "  - SWAP: ${SWAP}"
-echo "  - ROOT: ${ROOT}"
-echo "  - HOME: ${HOME}G"
-read -p "Are you sure you want to continue? (y/n) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-  # Create GPT partition table
-  sgdisk --clear ${DRIVE}
-  sgdisk --new=1:0:+${EFI} --typecode=1:ef00 ${DRIVE}
-  sgdisk --new=2:0:+${SWAP} --typecode=2:8200 ${DRIVE}
-  sgdisk --new=3:0:+${ROOT} --typecode=3:8300 ${DRIVE}
-  sgdisk --new=4:0:+${HOME}G --typecode=4:8300 ${DRIVE}
+# Calculate remaining space for home partition
+TOTAL_DISK_SIZE=$(blockdev --getsize64 $DISK_DEVICE)
+HOME_SIZE=$((TOTAL_DISK_SIZE - SWAP_SIZE - ROOT_SIZE))
 
-  # Set partition labels
-  sgdisk --change-name=1:EFI ${DRIVE}
-  sgdisk --change-name=2:SWAP ${DRIVE}
-  sgdisk --change-name=3:ROOT ${DRIVE}
-  sgdisk --change-name=4:HOME ${DRIVE}
+echo "Disk device: $DISK_DEVICE"
+echo "Swap partition size: $SWAP_SIZE"
+echo "Root partition size: $ROOT_SIZE"
+echo "Home partition size: $HOME_SIZE"
 
-  # Create file systems
-  mkfs.vfat -F32 ${DRIVE}1
-  mkswap ${DRIVE}2
-  mkfs.ext4 ${DRIVE}3
-  mkfs.ext4 ${DRIVE}4
+# Create GPT partition table
+sgdisk --zap-all $DISK_DEVICE
+sgdisk --new=1:0:+$SWAP_SIZE --typecode=1:8200 $DISK_DEVICE
+sgdisk --new=2:0:+$ROOT_SIZE --typecode=2:8300 $DISK_DEVICE
+sgdisk --new=3:0:0 --typecode=3:8300 $DISK_DEVICE
 
-  # Mount partitions
-  mount ${DRIVE}3 /mnt
-  mkdir /mnt/boot
-  mount ${DRIVE}1 /mnt/boot
-  mkdir /mnt/home
-  mount ${DRIVE}4 /mnt/home
-  swapon ${DRIVE}2
-else
-  echo "Partitioning cancelled."
-fi
+# Format partitions
+mkswap ${DISK_DEVICE}1
+swapon ${DISK_DEVICE}1
+mkfs.ext4 ${DISK_DEVICE}2
+mkfs.ext4 ${DISK_DEVICE}3
+
+# Mount partitions
+mount ${DISK_DEVICE}2 /mnt
+mkdir /mnt/boot
+mount ${DISK_DEVICE}1 /mnt/boot
+mkdir /mnt/home
+mount ${DISK_DEVICE}3 /mnt/home
