@@ -5,8 +5,8 @@ echo "Enter the disk device (e.g. /dev/sda):"
 read -r DISK_DEVICE
 
 # Set partition sizes
-SWAP_SIZE=8G
-ROOT_SIZE=40G
+SWAP_SIZE=1G
+ROOT_SIZE=10G
 
 # Calculate remaining space for home partition
 TOTAL_DISK_SIZE=$(blockdev --getsize64 $DISK_DEVICE)
@@ -18,10 +18,7 @@ echo "Root partition size: $ROOT_SIZE"
 echo "Home partition size: $HOME_SIZE"
 
 # Create GPT partition table
-sgdisk --zap-all $DISK_DEVICE
-sgdisk --new=1:0:+$SWAP_SIZE --typecode=1:8200 $DISK_DEVICE
-sgdisk --new=2:0:+$ROOT_SIZE --typecode=2:8300 $DISK_DEVICE
-sgdisk --new=3:0:0 --typecode=3:8300 $DISK_DEVICE
+echo -e "o\nn\np\n1\n\n+${SWAP_SIZE}\nn\np\n2\n\n+${ROOT_SIZE}\nn\np\n3\n\n\nw" | fdisk $DISK_DEVICE
 
 # Format partitions
 mkswap ${DISK_DEVICE}1
