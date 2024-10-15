@@ -3,8 +3,8 @@
 # Set variables
 DRIVE=/dev/sda
 EFI=1G
-SWAP=8G
-ROOT=40G
+SWAP=1G
+ROOT=10G
 
 # Calculate remaining space for /home
 TOTAL_SIZE=$(fdisk -s ${DRIVE})
