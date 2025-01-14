@@ -53,6 +53,7 @@ prepare_disk() {
     
     # Show available disks and get user input
     log "Available disks:"
+    separator
     lsblk -lpdo NAME,SIZE,TYPE,MODEL
     echo
 
@@ -87,7 +88,7 @@ prepare_disk() {
         fi
         
         if [ "$SWAP_SIZE" -gt "$AVAILABLE_SIZE" ]; then
-            warning "SWAP size (${SWAP_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
+            warning "SWAP size (${SWAP_SIZE} GB) is greater than available space (${AVAILABLE_SIZE} GB)"
             continue
         fi
         
@@ -96,11 +97,11 @@ prepare_disk() {
 
     # Update available space and get root size
     AVAILABLE_SIZE=$((AVAILABLE_SIZE - SWAP_SIZE))
-    log "Remaining space after swap: ${AVAILABLE_SIZE} GB"
+    log "Remaining space: ${AVAILABLE_SIZE} GB"
     
     while true; do
-        read -p "Enter ROOT partition size in GB (default: 50): " ROOT_SIZE
-        ROOT_SIZE=${ROOT_SIZE:-50}
+        read -p "Enter ROOT partition size in GB (default: 40): " ROOT_SIZE
+        ROOT_SIZE=${ROOT_SIZE:-40}
         
         if ! [[ "$ROOT_SIZE" =~ ^[0-9]+$ ]]; then
             warning "Please enter a valid number"
@@ -108,7 +109,7 @@ prepare_disk() {
         fi
         
         if [ "$ROOT_SIZE" -gt "$AVAILABLE_SIZE" ]; then
-            warning "ROOT size (${ROOT_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
+            warning "ROOT size (${ROOT_SIZE} GB) is greater than available space (${AVAILABLE_SIZE} GB)"
             continue
         fi
         
@@ -117,12 +118,9 @@ prepare_disk() {
     
     # Calculate remaining space for home
     AVAILABLE_SIZE=$((AVAILABLE_SIZE - ROOT_SIZE))
-    log "Remaining space for HOME: ${AVAILABLE_SIZE}GB"
+    log "Remaining space: ${AVAILABLE_SIZE}GB. It will be used for the HOME partition."
     
-    # Show current disk layout
-    log "Current disk layout:"
-    lsblk "$DISK"
-    
+        
     # Get user confirmation
     echo
     echo -e "${RED}WARNING:${NC} This will completely ${RED}ERASE${NC} all data on $DISK"
@@ -176,8 +174,10 @@ prepare_disk() {
     mount "${DISK}4" /mnt/home
     swapon "${DISK}2"
     
-    DISK_PREPARED=1
     success "Disk partitioning completed"
+    # Show current disk layout
+    log "Current disk layout:"
+    lsblk "$DISK"
 }
 
 install_base() {
@@ -322,17 +322,22 @@ EOF
 # Main Installation
 main() {
     clear
-    echo -e "${CYAN}########################################################${NC}"
-    echo "###        Welcome to Arch Linux installation        ###"
-    echo -e "${CYAN}########################################################${NC}"
+    
+    echo "${CYAN}###${NC}        Welcome to Arch Linux installation        ${CYAN}###${NC}"
     echo -e "${RED}WARNING:${NC}  This script will ${RED}ERASE${NC} all data on the selected disk"
     echo -e "${YELLOW}ATENTION:${NC} This script doesn't support BIOS systems"
+    echo "Disk will be partitioned and formatted:"
+    echo " * EFI partition: 1GB"
+    echo " * SWAP partition: USER INPUT"
+    echo " * ROOT partition: USER INPUT"
+    echo " * HOME partition: REMAINING DISK SPACE"
     separator
 
     
     check_boot_mode
     check_internet
 
+    echo
     prepare_disk
     install_base
     configure_system
