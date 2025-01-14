@@ -49,16 +49,28 @@ prepare_disk() {
     
     # Show available disks and get user input
     log "Available disks:"
-    lsblk -o NAME,SIZE,TYPE,PATH,MODEL,SERIAL,FSTYPE,MOUNTPOINT
+    lsblk -lpdo NAME,SIZE,TYPE,MODEL
     echo
-    read -p "Enter target disk (e.g. /dev/sda): " DISK
+
+    while true; do
+        read -p "Enter disk name (e.g. /dev/sda): " DISK
+        DISK=${DISK%/} # Remove trailing slashes
+        
+        # Check if disk block device
+        [[ ! -b "$DISK" ]] && { warning "Invalid disk name: $DISK"; continue; }
+
+        # Check for system devices
+        [[ "$DISK" =~ loop|sr|rom|airootfs ]] && { warning "Invalid! System device selected."; continue; }
+
+        break
+    done
     
     # Get disk size in GB and calculate available space
     DISK_SIZE=$(lsblk -b -n -o SIZE "$DISK" | head -n1)
     DISK_SIZE_GB=$((DISK_SIZE / 1024 / 1024 / 1024))
     AVAILABLE_SIZE=$((DISK_SIZE_GB - 1))  # Reserve 1GB for EFI partition
     
-    log "Selected disk size: ${DISK_SIZE_GB} GB (${AVAILABLE_SIZE} GB available)"
+    log "Selected disk size: ${DISK_SIZE_GB} GB (${AVAILABLE_SIZE} GB available(1GB reserved for EFI))"
 
     # Get and validate swap size
     while true; do
@@ -66,11 +78,11 @@ prepare_disk() {
         SWAP_SIZE=${SWAP_SIZE:-8}
         
         if ! [[ "$SWAP_SIZE" =~ ^[0-9]+$ ]]; then
-            error "Please enter a valid number"
+            warning "Please enter a valid number"
         fi
         
         if [ "$SWAP_SIZE" -gt "$AVAILABLE_SIZE" ]; then
-            error "Swap size (${SWAP_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
+            warning "Swap size (${SWAP_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
         fi
         
         break
@@ -85,11 +97,11 @@ prepare_disk() {
         ROOT_SIZE=${ROOT_SIZE:-50}
         
         if ! [[ "$ROOT_SIZE" =~ ^[0-9]+$ ]]; then
-            error "Please enter a valid number"
+            warning "Please enter a valid number"
         fi
         
         if [ "$ROOT_SIZE" -gt "$AVAILABLE_SIZE" ]; then
-            error "Root size (${ROOT_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
+            warning "Root size (${ROOT_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
         fi
         
         break
@@ -104,7 +116,7 @@ prepare_disk() {
     
     # Get user confirmation
     echo
-    log "WARNING: This will completely ERASE all data on $DISK"
+    warning "WARNING: This will completely ERASE all data on $DISK"
     read -p "Are you sure you want to continue? (y/n): " confirm
     if [ "$confirm" != "y" ]; then
         error "Installation aborted by user"
@@ -303,7 +315,9 @@ EOF
 main() {
     clear
     log "### Welcome to Arch Linux installation ###"
-    echo
+    echo -e "${RED}WARNING:${NC} This script will ${RED}ERASE${NC} all data on the selected disk"
+    echo -e "${YELLOW}ATENTION:${NC} This script doesn't support BIOS systems"
+
     
     check_boot_mode
     check_internet
