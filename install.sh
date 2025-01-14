@@ -53,7 +53,6 @@ prepare_disk() {
     
     # Show available disks and get user input
     log "Available disks:"
-    separator
     lsblk -lpdo NAME,SIZE,TYPE,MODEL
     echo
 
@@ -322,8 +321,9 @@ EOF
 # Main Installation
 main() {
     clear
-    
-    echo "${CYAN}###${NC}        Welcome to Arch Linux installation        ${CYAN}###${NC}"
+    echo
+    echo
+    echo -e "${CYAN}###${NC}        Welcome to Arch Linux installation        ${CYAN}###${NC}"
     echo -e "${RED}WARNING:${NC}  This script will ${RED}ERASE${NC} all data on the selected disk"
     echo -e "${YELLOW}ATENTION:${NC} This script doesn't support BIOS systems"
     echo "Disk will be partitioned and formatted:"
@@ -331,15 +331,26 @@ main() {
     echo " * SWAP partition: USER INPUT"
     echo " * ROOT partition: USER INPUT"
     echo " * HOME partition: REMAINING DISK SPACE"
-    separator
+    echo
+    echo
 
-    
+    echo -e "${CYAN}###${NC}        Checking...        ${CYAN}###${NC}"
     check_boot_mode
     check_internet
 
     echo
+    echo
+    echo -e "${CYAN}###${NC}        Configuring disk...        ${CYAN}###${NC}"
     prepare_disk
+
+    echo
+    echo
+    echo -e "${CYAN}###${NC}        Installing base system...        ${CYAN}###${NC}"
     install_base
+
+    echo
+    echo
+    echo -e "${CYAN}###${NC}        Configuring system...        ${CYAN}###${NC}"
     configure_system
 
 }
