@@ -54,8 +54,8 @@ perform_system_checks() {
 
 # Prepare disk for installation
 prepare_disk() {
+    # Check if system checks have been performed
     if [ $SYSTEM_CHECKED -eq 0 ]; then
-        warning "System checks not performed. Running them now..."
         perform_system_checks
     fi
 
@@ -63,46 +63,89 @@ prepare_disk() {
     
     # Show available disks and get user input
     log "Available disks:"
-    lsblk
+    lsblk -o NAME,SIZE,TYPE,PATH,MODEL,SERIAL,FSTYPE,MOUNTPOINT
     echo
     read -p "Enter target disk (e.g. /dev/sda): " DISK
-    while [ ! -b "$DISK" ]; do
-        error "Invalid disk. Please try again"
+    
+    # Validate disk selection with comprehensive checks
+    while true; do
+        if [ ! -b "$DISK" ]; then
+            warning "Device $DISK is not a block device."
+        elif [[ $(lsblk -no TYPE "$DISK" 2>/dev/null) != "disk" ]]; then
+            warning "Selected device $DISK is not a disk."
+        elif grep -q "^$DISK" /proc/mounts; then
+            warning "Selected disk $DISK is currently mounted. Please unmount first."
+        else
+            break
+        fi
         read -p "Enter target disk (e.g. /dev/sda): " DISK
     done
 
-    read -p "Enter swap partition size in GB (default: 8): " SWAP_SIZE
-    SWAP_SIZE=${SWAP_SIZE:-8}
-    while ! [[ "$SWAP_SIZE" =~ ^[0-9]+$ ]]; do
-        error "Invalid size. Please enter a number"
+    # Get disk size in GB and calculate available space
+    DISK_SIZE=$(lsblk -b -n -o SIZE "$DISK" | head -n1)
+    DISK_SIZE_GB=$((DISK_SIZE / 1024 / 1024 / 1024))
+    AVAILABLE_SIZE=$((DISK_SIZE_GB - 1))  # Reserve 1GB for EFI partition
+    
+    log "Selected disk size: ${DISK_SIZE_GB} GB (${AVAILABLE_SIZE} GB available)"
+
+    # Get and validate swap size
+    while true; do
         read -p "Enter swap partition size in GB (default: 8): " SWAP_SIZE
         SWAP_SIZE=${SWAP_SIZE:-8}
+        
+        if ! [[ "$SWAP_SIZE" =~ ^[0-9]+$ ]]; then
+            error "Please enter a valid number"
+        fi
+        
+        if [ "$SWAP_SIZE" -gt "$AVAILABLE_SIZE" ]; then
+            error "Swap size (${SWAP_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
+        fi
+        
+        break
     done
 
-    read -p "Enter root partition size in GB (default: 50): " ROOT_SIZE
-    ROOT_SIZE=${ROOT_SIZE:-50}
-    while ! [[ "$ROOT_SIZE" =~ ^[0-9]+$ ]]; do
-        error "Invalid size. Please enter a number"
+    # Update available space and get root size
+    AVAILABLE_SIZE=$((AVAILABLE_SIZE - SWAP_SIZE))
+    log "Remaining space after swap: ${AVAILABLE_SIZE} GB"
+    
+    while true; do
         read -p "Enter root partition size in GB (default: 50): " ROOT_SIZE
         ROOT_SIZE=${ROOT_SIZE:-50}
+        
+        if ! [[ "$ROOT_SIZE" =~ ^[0-9]+$ ]]; then
+            error "Please enter a valid number"
+        fi
+        
+        if [ "$ROOT_SIZE" -gt "$AVAILABLE_SIZE" ]; then
+            error "Root size (${ROOT_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
+        fi
+        
+        break
     done
+    
+    # Calculate remaining space for home
+    AVAILABLE_SIZE=$((AVAILABLE_SIZE - ROOT_SIZE))
     
     # Show current disk layout
     log "Current disk layout:"
     lsblk "$DISK"
     
-    # Confirmation
-    log "WARNING: This will erase all data on $DISK"
-    log "Planned partition scheme:"
-    echo "- EFI partition: 1024 MiB (FAT32)"
-    echo "- Swap partition: ${SWAP_SIZE} GiB (swap)"
-    echo "- Root partition: ${ROOT_SIZE} GiB (ext4)"
-    echo "- Home partition: Remaining space (ext4)"
-    
+    # Get user confirmation
+    echo
+    log "WARNING: This will completely erase all data on $DISK"
     read -p "Are you sure you want to continue? (y/n): " confirm
     if [ "$confirm" != "y" ]; then
         error "Installation aborted by user"
     fi
+
+    # Wipe all signatures from disk
+    log "Wiping all signatures from disk..."
+    wipefs -af "$DISK"
+    
+    # Zero out first and last 100MB of disk
+    log "Securely wiping disk..."
+    dd if=/dev/zero of="$DISK" bs=1M count=100 status=none
+    dd if=/dev/zero of="$DISK" bs=1M seek=$((DISK_SIZE_GB * 1024 - 100)) count=100 status=none
 
     # Calculate partition points
     BOOT_START="1MiB"
@@ -128,8 +171,8 @@ prepare_disk() {
     log "Formatting partitions..."
     mkfs.fat -F32 "${DISK}1"
     mkswap "${DISK}2"
-    mkfs.ext4 "${DISK}3"
-    mkfs.ext4 "${DISK}4"
+    mkfs.ext4 -F "${DISK}3"
+    mkfs.ext4 -F "${DISK}4"
         
     # Mount partitions
     log "Mounting partitions..."
@@ -146,45 +189,42 @@ prepare_disk() {
 
 install_base() {
     if [ $SYSTEM_CHECKED -eq 0 ]; then
-        warning "System checks not performed. Running them now..."
         perform_system_checks
     fi
     
     if [ $DISK_PREPARED -eq 0 ]; then
-        error "Disk is not prepared. Please run disk preparation first"
+        prepare_disk
     fi
 
     log "Installing base system..."
     
-    # Get package selection from user
-    read -p "Install CPU microcode? (y/n, default: y): " INSTALL_MICROCODE
-    INSTALL_MICROCODE=${INSTALL_MICROCODE:-y}
-    INSTALL_MICROCODE=$([ "$INSTALL_MICROCODE" = "y" ] && echo 1 || echo 0)
+    # Determine CPU microcode based on the CPU model
+    if lscpu | grep -q "Intel"; then
+        MICROCODE="intel-ucode"
+    elif lscpu | grep -q "AMD"; then
+        MICROCODE="amd-ucode"
+    else
+        MICROCODE=""
+    fi
 
-    read -p "Install NetworkManager? (y/n, default: y): " INSTALL_NETWORK_MANAGER
-    INSTALL_NETWORK_MANAGER=${INSTALL_NETWORK_MANAGER:-y}
-    INSTALL_NETWORK_MANAGER=$([ "$INSTALL_NETWORK_MANAGER" = "y" ] && echo 1 || echo 0)
-
-    read -p "Install bluetooth support? (y/n, default: n): " INSTALL_BLUETOOTH
-    INSTALL_BLUETOOTH=${INSTALL_BLUETOOTH:-n}
-    INSTALL_BLUETOOTH=$([ "$INSTALL_BLUETOOTH" = "y" ] && echo 1 || echo 0)
-
-    read -p "Install wifi support? (y/n, default: n): " INSTALL_WIFI
-    INSTALL_WIFI=${INSTALL_WIFI:-n}
-    INSTALL_WIFI=$([ "$INSTALL_WIFI" = "y" ] && echo 1 || echo 0)
-
-    read -p "Enter additional packages (space-separated, default: vim git wget curl): " EXTRA_PACKAGES
-    EXTRA_PACKAGES=${EXTRA_PACKAGES:-"vim git wget curl"}
+    # Prepare packages
+    PACKAGES="base base-devel linux linux-firmware grub efibootmgr sudo networkmanager"
+    PACKAGES="$PACKAGES $MICROCODE"
     
-    # Prepare package list
-    PACKAGES="base base-devel linux linux-firmware grub efibootmgr sudo $EXTRA_PACKAGES"
+
+   
     
-    # Add conditional packages
-    [ $INSTALL_MICROCODE -eq 1 ] && PACKAGES="$PACKAGES intel-ucode amd-ucode"
-    [ $INSTALL_NETWORK_MANAGER -eq 1 ] && PACKAGES="$PACKAGES networkmanager"
-    [ $INSTALL_BLUETOOTH -eq 1 ] && PACKAGES="$PACKAGES bluez bluez-utils"
-    [ $INSTALL_WIFI -eq 1 ] && PACKAGES="$PACKAGES iwd wpa_supplicant"
+    # Display packages to be installed
+    echo "The following packages will be installed:"
+    echo "$PACKAGES"
     
+    read -p "Do you confirm the installation of these packages? (y/n, default: y): " CONFIRM
+    CONFIRM=${CONFIRM:-y}
+
+    if [ "$CONFIRM_INSTALL" != "y" ]; then
+        error "Installation aborted."
+    fi
+
     # Install packages
     pacstrap /mnt $PACKAGES
     
@@ -194,16 +234,15 @@ install_base() {
 
 configure_system() {
     if [ $SYSTEM_CHECKED -eq 0 ]; then
-        warning "System checks not performed. Running them now..."
         perform_system_checks
     fi
     
     if [ $DISK_PREPARED -eq 0 ]; then
-        error "Disk is not prepared. Please run disk preparation first"
+        warning "Disk is not prepared. Please run disk preparation first"
     fi
     
     if [ $BASE_INSTALLED -eq 0 ]; then
-        error "Base system is not installed. Please run system installation first"
+        warning "Base system is not installed. Please run system installation first"
     fi
 
     log "Configuring system..."
@@ -346,7 +385,7 @@ main() {
                 exit 0
                 ;;
             *)
-                error "Invalid option. Please choose 1-5"
+                warning "Invalid option. Please choose 1-5"
                 ;;
         esac
     done
