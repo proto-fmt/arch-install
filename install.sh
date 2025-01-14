@@ -21,7 +21,7 @@ ROOT_PASSWORD="root_password"    # Root password
 USER_PASSWORD="user_password"    # User password
 
 # Package selection (1 to install, 0 to skip)
-INSTALL_MICROCODE=1          # Install CPU microcode
+INSTALL_MICROCODE=1          # Install CPU microcode 
 INSTALL_NETWORK_MANAGER=1    # Install NetworkManager
 INSTALL_BLUETOOTH=0          # Install bluetooth support
 INSTALL_WIFI=0               # Install wifi support
@@ -264,7 +264,7 @@ main() {
     # Unmount everything before finishing
     log "Unmounting partitions..."
     umount -R /mnt || warning "Failed to unmount some partitions"
-    
+
     success "Installation completed successfully!"
     log "Please remove the installation media and reboot."
 }
