@@ -318,9 +318,12 @@ EOF
 # Main Installation
 main() {
     clear
-    log "### Welcome to Arch Linux installation ###"
-    echo -e "${RED}WARNING:${NC} This script will ${RED}ERASE${NC} all data on the selected disk"
+    echo -e "${CYAN}########################################################${NC}"
+    echo "### Welcome to Arch Linux installation ###"
+    echo -e "${CYAN}########################################################${NC}"
+    echo -e "${RED}WARNING:${NC}  This script will ${RED}ERASE${NC} all data on the selected disk"
     echo -e "${YELLOW}ATENTION:${NC} This script doesn't support BIOS systems"
+    echo -e "${CYAN}########################################################${NC}"
 
     
     check_boot_mode
