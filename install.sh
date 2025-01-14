@@ -302,7 +302,8 @@ EOF
 # Main Installation
 main() {
     clear
-    log "Welcome to Arch Linux installation"
+    log "### Welcome to Arch Linux installation ###"
+    echo
     
     check_boot_mode
     check_internet
@@ -310,7 +311,7 @@ main() {
     prepare_disk
     install_base
     configure_system
-    
+
 }
 
 # Start installation
