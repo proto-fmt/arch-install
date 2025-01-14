@@ -22,10 +22,6 @@ warning() {
     echo -e "${YELLOW}[!] Warning: ${NC}$1"
 }
 
-# Global state variables
-SYSTEM_CHECKED=0    # Flag indicating if system checks have been performed
-DISK_PREPARED=0     # Flag indicating if disk has been prepared for installation
-BASE_INSTALLED=0    # Flag indicating if base system has been installed
 
 # Check boot mode (UEFI only)
 check_boot_mode() {
@@ -45,20 +41,10 @@ check_internet() {
     success "Internet connection is working"
 }
 
-# System checks
-perform_system_checks() {
-    check_boot_mode
-    check_internet
-    SYSTEM_CHECKED=1
-}
+
 
 # Prepare disk for installation
 prepare_disk() {
-    # Check if system checks have been performed
-    if [ $SYSTEM_CHECKED -eq 0 ]; then
-        perform_system_checks
-    fi
-
     log "Preparing disk for installation..."
     
     # Show available disks and get user input
@@ -67,20 +53,6 @@ prepare_disk() {
     echo
     read -p "Enter target disk (e.g. /dev/sda): " DISK
     
-    # Validate disk selection with comprehensive checks
-    #while true; do
-        #if [ ! -b "$DISK" ]; then
-            #warning "Device $DISK is not a block device."
-        #elif [[ $(lsblk -no TYPE "$DISK" 2>/dev/null) != "disk" ]]; then
-            #warning "Selected device $DISK is not a disk."
-        #elif grep -q "^$DISK" /proc/mounts; then
-            #warning "Selected disk $DISK is currently mounted. Please unmount first."
-        #else
-            #break
-        #fi
-        #read -p "Enter target disk (e.g. /dev/sda): " DISK
-    #done
-
     # Get disk size in GB and calculate available space
     DISK_SIZE=$(lsblk -b -n -o SIZE "$DISK" | head -n1)
     DISK_SIZE_GB=$((DISK_SIZE / 1024 / 1024 / 1024))
@@ -90,7 +62,7 @@ prepare_disk() {
 
     # Get and validate swap size
     while true; do
-        read -p "Enter swap partition size in GB (default: 8): " SWAP_SIZE
+        read -p "Enter SWAP partition size in GB (default: 8): " SWAP_SIZE
         SWAP_SIZE=${SWAP_SIZE:-8}
         
         if ! [[ "$SWAP_SIZE" =~ ^[0-9]+$ ]]; then
@@ -132,7 +104,7 @@ prepare_disk() {
     
     # Get user confirmation
     echo
-    log "WARNING: This will completely erase all data on $DISK"
+    log "WARNING: This will completely ERASE all data on $DISK"
     read -p "Are you sure you want to continue? (y/n): " confirm
     if [ "$confirm" != "y" ]; then
         error "Installation aborted by user"
@@ -188,14 +160,6 @@ prepare_disk() {
 }
 
 install_base() {
-    if [ $SYSTEM_CHECKED -eq 0 ]; then
-        perform_system_checks
-    fi
-    
-    if [ $DISK_PREPARED -eq 0 ]; then
-        prepare_disk
-    fi
-
     log "Installing base system..."
     
     # Determine CPU microcode based on the CPU model
@@ -211,8 +175,6 @@ install_base() {
     PACKAGES="base base-devel linux linux-firmware grub efibootmgr sudo networkmanager"
     PACKAGES="$PACKAGES $MICROCODE"
     
-
-   
     
     # Display packages to be installed
     echo "The following packages will be installed:"
@@ -228,23 +190,11 @@ install_base() {
     # Install packages
     pacstrap /mnt $PACKAGES
     
-    BASE_INSTALLED=1
+ 
     success "Base system installed"
 }
 
 configure_system() {
-    if [ $SYSTEM_CHECKED -eq 0 ]; then
-        perform_system_checks
-    fi
-    
-    if [ $DISK_PREPARED -eq 0 ]; then
-        prepare_disk
-    fi
-    
-    if [ $BASE_INSTALLED -eq 0 ]; then
-        install_base
-    fi
-
     log "Configuring system..."
 
     # Get system configuration from user
@@ -354,41 +304,13 @@ main() {
     clear
     log "Welcome to Arch Linux installation"
     
-    while true; do
-        echo
-        echo "Installation steps:"
-        echo "1. System checks (boot mode and internet)"
-        echo "2. Disk preparation"
-        echo "3. Base system installation"
-        echo "4. System configuration"
-        echo "5. Exit"
-        echo
-        read -p "Choose step (1-5): " step
-        
-        case $step in
-            1)
-                perform_system_checks
-                ;;
-            2)
-                prepare_disk
-                ;;
-            3)
-                install_base
-                ;;
-            4)
-                configure_system
-                success "Installation completed successfully!"
-                log "Please remove the installation media and reboot."
-                ;;
-            5)
-                log "Exiting installation..."
-                exit 0
-                ;;
-            *)
-                warning "Invalid option. Please choose 1-5"
-                ;;
-        esac
-    done
+    check_boot_mode
+    check_internet
+
+    prepare_disk
+    install_base
+    configure_system
+    
 }
 
 # Start installation
