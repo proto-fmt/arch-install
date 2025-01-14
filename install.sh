@@ -22,16 +22,18 @@ warning() {
     echo -e "${YELLOW}[!] Warning: ${NC}$1"
 }
 
-# Check boot mode (UEFI or BIOS)
+# Global state variables
+SYSTEM_CHECKED=0    # Flag indicating if system checks have been performed
+DISK_PREPARED=0     # Flag indicating if disk has been prepared for installation
+BASE_INSTALLED=0    # Flag indicating if base system has been installed
+
+# Check boot mode (UEFI only)
 check_boot_mode() {
     log "Checking boot mode..."
-    if [ -d "/sys/firmware/efi" ]; then
-        BOOT_MODE="uefi"
-        success "UEFI system detected"
-    else
-        BOOT_MODE="bios" 
-        success "BIOS system detected"
+    if [ ! -d "/sys/firmware/efi" ]; then
+        error "This script only supports UEFI systems"
     fi
+    success "UEFI system detected"
 }
 
 # Check if internet is working
@@ -43,8 +45,20 @@ check_internet() {
     success "Internet connection is working"
 }
 
+# System checks
+perform_system_checks() {
+    check_boot_mode
+    check_internet
+    SYSTEM_CHECKED=1
+}
+
 # Prepare disk for installation
 prepare_disk() {
+    if [ $SYSTEM_CHECKED -eq 0 ]; then
+        warning "System checks not performed. Running them now..."
+        perform_system_checks
+    fi
+
     log "Preparing disk for installation..."
     
     # Show available disks and get user input
@@ -80,11 +94,7 @@ prepare_disk() {
     # Confirmation
     log "WARNING: This will erase all data on $DISK"
     log "Planned partition scheme:"
-    if [ "$BOOT_MODE" = "uefi" ]; then
-        echo "- EFI partition: 1024 MiB (FAT32)"
-    else
-        echo "- Boot partition: 1024 MiB (ext4)"
-    fi
+    echo "- EFI partition: 1024 MiB (FAT32)"
     echo "- Swap partition: ${SWAP_SIZE} GiB (swap)"
     echo "- Root partition: ${ROOT_SIZE} GiB (ext4)"
     echo "- Home partition: Remaining space (ext4)"
@@ -106,31 +116,17 @@ prepare_disk() {
 
     # Create partitions
     log "Creating partitions..."
-    if [ "$BOOT_MODE" = "uefi" ]; then
-        parted -s "$DISK" \
-            mklabel gpt \
-            mkpart "EFI" fat32 $BOOT_START $BOOT_END \
-            set 1 esp on \
-            mkpart "Swap" linux-swap $SWAP_START $SWAP_END \
-            mkpart "Root" ext4 $ROOT_START $ROOT_END \
-            mkpart "Home" ext4 $HOME_START $HOME_END
-    else
-        parted -s "$DISK" \
-            mklabel msdos \
-            mkpart primary ext4 $BOOT_START $BOOT_END \
-            set 1 boot on \
-            mkpart primary linux-swap $SWAP_START $SWAP_END \
-            mkpart primary ext4 $ROOT_START $ROOT_END \
-            mkpart primary ext4 $HOME_START $HOME_END
-    fi
+    parted -s "$DISK" \
+        mklabel gpt \
+        mkpart "EFI" fat32 $BOOT_START $BOOT_END \
+        set 1 esp on \
+        mkpart "Swap" linux-swap $SWAP_START $SWAP_END \
+        mkpart "Root" ext4 $ROOT_START $ROOT_END \
+        mkpart "Home" ext4 $HOME_START $HOME_END
             
     # Format partitions
     log "Formatting partitions..."
-    if [ "$BOOT_MODE" = "uefi" ]; then
-        mkfs.fat -F32 "${DISK}1"
-    else
-        mkfs.ext4 "${DISK}1"
-    fi
+    mkfs.fat -F32 "${DISK}1"
     mkswap "${DISK}2"
     mkfs.ext4 "${DISK}3"
     mkfs.ext4 "${DISK}4"
@@ -138,21 +134,26 @@ prepare_disk() {
     # Mount partitions
     log "Mounting partitions..."
     mount "${DISK}3" /mnt
-    if [ "$BOOT_MODE" = "uefi" ]; then
-        mkdir -p /mnt/boot/efi
-        mount "${DISK}1" /mnt/boot/efi
-    else
-        mkdir -p /mnt/boot
-        mount "${DISK}1" /mnt/boot
-    fi
+    mkdir -p /mnt/boot/efi
+    mount "${DISK}1" /mnt/boot/efi
     mkdir -p /mnt/home
     mount "${DISK}4" /mnt/home
     swapon "${DISK}2"
     
+    DISK_PREPARED=1
     success "Disk partitioning completed"
 }
 
 install_base() {
+    if [ $SYSTEM_CHECKED -eq 0 ]; then
+        warning "System checks not performed. Running them now..."
+        perform_system_checks
+    fi
+    
+    if [ $DISK_PREPARED -eq 0 ]; then
+        error "Disk is not prepared. Please run disk preparation first"
+    fi
+
     log "Installing base system..."
     
     # Get package selection from user
@@ -176,10 +177,9 @@ install_base() {
     EXTRA_PACKAGES=${EXTRA_PACKAGES:-"vim git wget curl"}
     
     # Prepare package list
-    PACKAGES="base base-devel linux linux-firmware grub sudo $EXTRA_PACKAGES"
+    PACKAGES="base base-devel linux linux-firmware grub efibootmgr sudo $EXTRA_PACKAGES"
     
     # Add conditional packages
-    [ "$BOOT_MODE" = "uefi" ] && PACKAGES="$PACKAGES efibootmgr"
     [ $INSTALL_MICROCODE -eq 1 ] && PACKAGES="$PACKAGES intel-ucode amd-ucode"
     [ $INSTALL_NETWORK_MANAGER -eq 1 ] && PACKAGES="$PACKAGES networkmanager"
     [ $INSTALL_BLUETOOTH -eq 1 ] && PACKAGES="$PACKAGES bluez bluez-utils"
@@ -188,10 +188,24 @@ install_base() {
     # Install packages
     pacstrap /mnt $PACKAGES
     
+    BASE_INSTALLED=1
     success "Base system installed"
 }
 
 configure_system() {
+    if [ $SYSTEM_CHECKED -eq 0 ]; then
+        warning "System checks not performed. Running them now..."
+        perform_system_checks
+    fi
+    
+    if [ $DISK_PREPARED -eq 0 ]; then
+        error "Disk is not prepared. Please run disk preparation first"
+    fi
+    
+    if [ $BASE_INSTALLED -eq 0 ]; then
+        error "Base system is not installed. Please run system installation first"
+    fi
+
     log "Configuring system..."
 
     # Get system configuration from user
@@ -281,11 +295,7 @@ configure_system() {
     echo "%wheel ALL=(ALL) ALL" >> /etc/sudoers.d/wheel
     
     # Bootloader
-    if [ "$BOOT_MODE" = "uefi" ]; then
-        grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
-    else
-        grub-install --target=i386-pc $DISK
-    fi
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
     grub-mkconfig -o /boot/grub/grub.cfg
     
     # Enable services
@@ -293,7 +303,11 @@ configure_system() {
     [ $INSTALL_BLUETOOTH -eq 1 ] && systemctl enable bluetooth
 EOF
     
-    success "System configured"
+    # Unmount everything before finishing
+    log "Unmounting partitions..."
+    umount -R /mnt || warning "Failed to unmount some partitions"
+    
+    success "System configuration completed"
 }
 
 # Main Installation
@@ -306,34 +320,33 @@ main() {
         echo "Installation steps:"
         echo "1. System checks (boot mode and internet)"
         echo "2. Disk preparation"
-        echo "3. System installation and configuration"
-        echo "4. Exit"
+        echo "3. Base system installation"
+        echo "4. System configuration"
+        echo "5. Exit"
         echo
-        read -p "Choose step (1-4): " step
+        read -p "Choose step (1-5): " step
         
         case $step in
             1)
-                check_boot_mode
-                check_internet
+                perform_system_checks
                 ;;
             2)
                 prepare_disk
                 ;;
             3)
                 install_base
+                ;;
+            4)
                 configure_system
-                # Unmount everything before finishing
-                log "Unmounting partitions..."
-                umount -R /mnt || warning "Failed to unmount some partitions"
                 success "Installation completed successfully!"
                 log "Please remove the installation media and reboot."
                 ;;
-            4)
+            5)
                 log "Exiting installation..."
                 exit 0
                 ;;
             *)
-                error "Invalid option. Please choose 1-4"
+                error "Invalid option. Please choose 1-5"
                 ;;
         esac
     done
