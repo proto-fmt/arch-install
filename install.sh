@@ -22,6 +22,10 @@ warning() {
     echo -e "${YELLOW}[!] Warning: ${NC}$1"
 }
 
+separator() {
+    echo "--------------------------------------------------------"
+}
+
 
 # Check boot mode (UEFI only)
 check_boot_mode() {
@@ -318,12 +322,12 @@ EOF
 # Main Installation
 main() {
     clear
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║${NC}           Welcome to Arch Linux Installation            ${CYAN}║${NC}"
-    echo -e "${CYAN}╠══════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${CYAN}║${NC} ${RED}WARNING:${NC}  This script will ${RED}ERASE${NC} all data on disk    ${CYAN}║${NC}"
-    echo -e "${CYAN}║${NC} ${YELLOW}NOTE:${NC}    This script only supports UEFI systems      ${CYAN}║${NC}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${CYAN}########################################################${NC}"
+    echo "###        Welcome to Arch Linux installation        ###"
+    echo -e "${CYAN}########################################################${NC}"
+    echo -e "${RED}WARNING:${NC}  This script will ${RED}ERASE${NC} all data on the selected disk"
+    echo -e "${YELLOW}ATENTION:${NC} This script doesn't support BIOS systems"
+    separator
 
     
     check_boot_mode
