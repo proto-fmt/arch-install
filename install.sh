@@ -68,18 +68,18 @@ prepare_disk() {
     read -p "Enter target disk (e.g. /dev/sda): " DISK
     
     # Validate disk selection with comprehensive checks
-    while true; do
-        if [ ! -b "$DISK" ]; then
-            warning "Device $DISK is not a block device."
-        elif [[ $(lsblk -no TYPE "$DISK" 2>/dev/null) != "disk" ]]; then
-            warning "Selected device $DISK is not a disk."
-        elif grep -q "^$DISK" /proc/mounts; then
-            warning "Selected disk $DISK is currently mounted. Please unmount first."
-        else
-            break
-        fi
-        read -p "Enter target disk (e.g. /dev/sda): " DISK
-    done
+    #while true; do
+        #if [ ! -b "$DISK" ]; then
+            #warning "Device $DISK is not a block device."
+        #elif [[ $(lsblk -no TYPE "$DISK" 2>/dev/null) != "disk" ]]; then
+            #warning "Selected device $DISK is not a disk."
+        #elif grep -q "^$DISK" /proc/mounts; then
+            #warning "Selected disk $DISK is currently mounted. Please unmount first."
+        #else
+            #break
+        #fi
+        #read -p "Enter target disk (e.g. /dev/sda): " DISK
+    #done
 
     # Get disk size in GB and calculate available space
     DISK_SIZE=$(lsblk -b -n -o SIZE "$DISK" | head -n1)
