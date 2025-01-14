@@ -70,7 +70,7 @@ prepare_disk() {
     DISK_SIZE_GB=$((DISK_SIZE / 1024 / 1024 / 1024))
     AVAILABLE_SIZE=$((DISK_SIZE_GB - 1))  # Reserve 1GB for EFI partition
     
-    log "Selected disk size: ${DISK_SIZE_GB} GB (${AVAILABLE_SIZE} GB available(1GB reserved for EFI))"
+    log "Selected disk size: ${DISK_SIZE_GB}GB. ${AVAILABLE_SIZE}GB available (1GB reserved for EFI)"
 
     # Get and validate swap size
     while true; do
@@ -79,10 +79,12 @@ prepare_disk() {
         
         if ! [[ "$SWAP_SIZE" =~ ^[0-9]+$ ]]; then
             warning "Please enter a valid number"
+            continue
         fi
         
         if [ "$SWAP_SIZE" -gt "$AVAILABLE_SIZE" ]; then
-            warning "Swap size (${SWAP_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
+            warning "SWAP size (${SWAP_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
+            continue
         fi
         
         break
@@ -93,15 +95,17 @@ prepare_disk() {
     log "Remaining space after swap: ${AVAILABLE_SIZE} GB"
     
     while true; do
-        read -p "Enter root partition size in GB (default: 50): " ROOT_SIZE
+        read -p "Enter ROOT partition size in GB (default: 50): " ROOT_SIZE
         ROOT_SIZE=${ROOT_SIZE:-50}
         
         if ! [[ "$ROOT_SIZE" =~ ^[0-9]+$ ]]; then
             warning "Please enter a valid number"
+            continue
         fi
         
         if [ "$ROOT_SIZE" -gt "$AVAILABLE_SIZE" ]; then
-            warning "Root size (${ROOT_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
+            warning "ROOT size (${ROOT_SIZE} GB) exceeds available space (${AVAILABLE_SIZE} GB)"
+            continue
         fi
         
         break
@@ -109,6 +113,7 @@ prepare_disk() {
     
     # Calculate remaining space for home
     AVAILABLE_SIZE=$((AVAILABLE_SIZE - ROOT_SIZE))
+    log "Remaining space for HOME: ${AVAILABLE_SIZE}GB"
     
     # Show current disk layout
     log "Current disk layout:"
@@ -116,9 +121,9 @@ prepare_disk() {
     
     # Get user confirmation
     echo
-    warning "WARNING: This will completely ERASE all data on $DISK"
+    echo -e "${RED}WARNING:${NC} This will completely ${RED}ERASE${NC} all data on $DISK"
     read -p "Are you sure you want to continue? (y/n): " confirm
-    if [ "$confirm" != "y" ]; then
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         error "Installation aborted by user"
     fi
 
@@ -192,10 +197,9 @@ install_base() {
     echo "The following packages will be installed:"
     echo "$PACKAGES"
     
-    read -p "Do you confirm the installation of these packages? (y/n, default: y): " CONFIRM
-    CONFIRM=${CONFIRM:-y}
+    read -p "Do you confirm the installation of these packages? (y/n): " confirm
 
-    if [ "$CONFIRM_INSTALL" != "y" ]; then
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         error "Installation aborted."
     fi
 
