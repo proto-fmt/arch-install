@@ -238,11 +238,11 @@ configure_system() {
     fi
     
     if [ $DISK_PREPARED -eq 0 ]; then
-        warning "Disk is not prepared. Please run disk preparation first"
+        prepare_disk
     fi
     
     if [ $BASE_INSTALLED -eq 0 ]; then
-        warning "Base system is not installed. Please run system installation first"
+        install_base
     fi
 
     log "Configuring system..."
