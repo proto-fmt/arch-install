@@ -147,7 +147,7 @@ prepare_disk() {
     DISK_SIZE_GB=$((DISK_SIZE / 1024 / 1024 / 1024))
     AVAILABLE_SIZE=$((DISK_SIZE_GB - 1))  # Reserve 1GB for EFI partition
     
-    log "Selected disk size: ${DISK_SIZE_GB}GB. ${AVAILABLE_SIZE}GB available (1GB reserved for EFI)"
+    info "Selected disk size: ${DISK_SIZE_GB}GB. ${AVAILABLE_SIZE}GB available (1GB reserved for EFI)"
 
     # Get and validate swap size
     while true; do
@@ -169,7 +169,7 @@ prepare_disk() {
 
     # Update available space and get root size
     AVAILABLE_SIZE=$((AVAILABLE_SIZE - SWAP_SIZE))
-    log "Remaining space: ${AVAILABLE_SIZE} GB"
+    info "Remaining space: ${AVAILABLE_SIZE} GB"
     
     while true; do
         read -p "Enter ROOT partition size in GB (default: 40): " ROOT_SIZE
@@ -202,11 +202,11 @@ prepare_disk() {
     fi
 
     # Wipe all signatures from disk
-    log "Wiping all signatures from disk..."
+    info "Wiping all signatures from disk..."
     wipefs -af "$DISK"
     
     # Zero out first and last 100MB of disk
-    log "Securely wiping disk..."
+    info "Securely wiping disk..."
     dd if=/dev/zero of="$DISK" bs=1M count=100 status=none
     dd if=/dev/zero of="$DISK" bs=1M seek=$((DISK_SIZE_GB * 1024 - 100)) count=100 status=none
 
@@ -221,7 +221,7 @@ prepare_disk() {
     HOME_END="100%"
 
     # Create partitions
-    log "Creating partitions..."
+    info "Creating partitions..."
     parted -s "$DISK" \
         mklabel gpt \
         mkpart "EFI" fat32 $BOOT_START $BOOT_END \
@@ -248,12 +248,12 @@ prepare_disk() {
     
     success "Disk partitioning completed"
     # Show current disk layout
-    log "Current disk layout:"
+    info "Current disk layout:"
     lsblk "$DISK"
 }
 
 install_base() {
-    log "Installing base system..."
+    echo "Installing base system..."
     
     # Determine CPU microcode based on the CPU model
     if lscpu | grep -q "Intel"; then
@@ -287,7 +287,7 @@ install_base() {
 }
 
 configure_system() {
-    log "Configuring system..."
+    echo "Configuring system..."
 
     # Get system configuration from user
     read -p "Enter hostname (default: archlinux): " HOSTNAME
@@ -306,7 +306,7 @@ configure_system() {
         USERNAME=${USERNAME:-user}
     done
 
-    log "Available timezones:"
+    info "Available timezones:"
     timedatectl list-timezones | less
     read -p "Enter timezone (e.g. Europe/London): " TIMEZONE
     while [ ! -f "/usr/share/zoneinfo/$TIMEZONE" ]; do
@@ -385,7 +385,7 @@ configure_system() {
 EOF
     
     # Unmount everything before finishing
-    log "Unmounting partitions..."
+    info "Unmounting partitions..."
     umount -R /mnt || warning "Failed to unmount some partitions"
     
     success "System configuration completed"
