@@ -414,6 +414,8 @@ main() {
         exit 1
     fi
 
+    success "Installation confirmed. Starting installation..."
+
  
     check_boot_mode
     check_internet
