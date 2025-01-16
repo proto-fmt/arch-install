@@ -67,7 +67,6 @@ check_internet() {
     fi
 }
 
-
 ##### Check system clock synchronization
 check_clock() {
     MAX_ATTEMPTS=3  # Number of attempts to synchronize the clock
@@ -105,14 +104,10 @@ check_clock() {
 }
 
 
-
-
-# Prepare disk for installation
-prepare_disk() {
-    log "Preparing disk for installation..."
-    
-    # Show available disks and get user input
-    log "Available disks:"
+##### Function to let user select disk
+select_disk() {
+    # Show available disks
+    echo "Available disks:"
     lsblk -lpdo NAME,SIZE,TYPE,MODEL
     echo
 
@@ -121,13 +116,27 @@ prepare_disk() {
         DISK=${DISK%/} # Remove trailing slashes
         
         # Check if disk block device
-        [[ ! -b "$DISK" ]] && { warning "Invalid disk name: $DISK"; continue; }
+        [[ ! -b "$DISK" ]] && { log_warning "Invalid disk name: $DISK"; continue; }
 
         # Check for system devices
-        [[ "$DISK" =~ loop|sr|rom|airootfs ]] && { warning "Invalid! System device selected."; continue; }
+        [[ "$DISK" =~ loop|sr|rom|airootfs ]] && { log_warning "Invalid! System device selected."; continue; }
 
         break
     done
+
+    echo -e "${RED}WARNING: All data on $DISK ($DISK_SIZE_GB GB) will be erased!${NC}"
+    read -p "Continue? (y/n): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        error "Canceled by user"
+        exit 1
+    fi
+
+    success "Selected disk: $DISK ($(lsblk -ndo SIZE "$DISK"))"
+}
+
+##### Prepare disk for installation
+prepare_disk() {
+    
     
     # Get disk size in GB and calculate available space
     DISK_SIZE=$(lsblk -b -n -o SIZE "$DISK" | head -n1)
@@ -397,6 +406,8 @@ main() {
     check_boot_mode
     check_internet
     check_clock
+
+    select_disk
 
    prepare_disk
 
