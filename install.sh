@@ -394,11 +394,11 @@ EOF
 # Main Installation
 main() {
     clear
-    log "${CYAN}###${NC} Welcome to Arch Linux installation ${CYAN}###${NC}"
+    info "Welcome to Arch Linux installation"
     echo 
-    echo -e "${RED}WARNING:${NC} This script ${RED}WILL DELETE${NC} all data on the drive you selected."
-    echo -e "${YELLOW}ATENTION:${NC} This script doesn't support BIOS systems"
-    echo -e "${YELLOW}ATENTION:${NC} This script does not allow you to select disk partitions yourself, as well as file systems."
+    warning "${RED}WARNING:${NC} This script ${RED}WILL DELETE${NC} all data on the drive you selected."
+    warning "${YELLOW}ATENTION:${NC} This script doesn't support BIOS systems"
+    warning "${YELLOW}ATENTION:${NC} This script does not allow you to select disk partitions yourself, as well as file systems."
     echo -e "It will create the following partitions:"
     echo " * EFI (fat32): 1GB"
     echo " * SWAP (swap): YOUR INPUT"
