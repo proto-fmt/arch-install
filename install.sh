@@ -10,7 +10,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Helpers functions
-log() {
+info() {
     echo -e "${CYAN}[INFO] ${NC}$1"
 }
 error() {
@@ -21,6 +21,10 @@ success() {
 }
 warning() {
     echo -e "${YELLOW}[WARN] ${NC}$1"
+}
+
+separator() {
+    echo "----------------------------------------"
 }
 
 
@@ -107,7 +111,7 @@ check_clock() {
 ##### Function to let user select disk
 select_disk() {
     # Show available disks
-    echo "Available disks:"
+    info "Available disks:"
     lsblk -lpdo NAME,SIZE,TYPE,MODEL
     echo
 
@@ -390,17 +394,25 @@ EOF
 # Main Installation
 main() {
     clear
-    echo -e "${CYAN}###${NC} Welcome to Arch Linux installation ${CYAN}###${NC}"
+    log "${CYAN}###${NC} Welcome to Arch Linux installation ${CYAN}###${NC}"
     echo 
-    echo -e "${RED}WARNING:${NC}  This script will ${RED}ERASE${NC} all data on the selected disk"
+    echo -e "${RED}WARNING:${NC} This script ${RED}WILL DELETE${NC} all data on the drive you selected."
     echo -e "${YELLOW}ATENTION:${NC} This script doesn't support BIOS systems"
+    echo -e "${YELLOW}ATENTION:${NC} This script does not allow you to select disk partitions yourself, as well as file systems."
+    echo -e "It will create the following partitions:"
+    echo " * EFI (fat32): 1GB"
+    echo " * SWAP (swap): YOUR INPUT"
+    echo " * ROOT (ext4): YOUR INPUT"
+    echo " * HOME (ext4): REMAINING DISK SPACE"
     echo
-    echo "This script will install the following partitions:"
-    echo " * EFI partition: 1GB"
-    echo " * SWAP partition: USER INPUT"
-    echo " * ROOT partition: USER INPUT"
-    echo " * HOME partition: REMAINING DISK SPACE"
+    separator
     echo
+    read -p "Do you confirm the installation? (y/n): " confirm
+
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        error "Installation aborted."
+        exit 1
+    fi
 
  
     check_boot_mode
