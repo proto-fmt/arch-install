@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # Color Configuration
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -7,43 +9,101 @@ CYAN='\033[0;36m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Helper Functions
+# Helpers functions
 log() {
-    echo -e "${CYAN}[*] ${NC}$1"
+    echo -e "${CYAN}[INFO] ${NC}$1"
 }
 error() {
-    echo -e "${RED}[!] Error: ${NC}$1"
-    exit 1
+    echo -e "${RED}[FAIL] ${NC}$1"
 }
 success() {
-    echo -e "${GREEN}[+] ${NC}$1"
+    echo -e "${GREEN}[OK] ${NC}$1"
 }
 warning() {
-    echo -e "${YELLOW}[!] Warning: ${NC}$1"
-}
-
-separator() {
-    echo "--------------------------------------------------------"
+    echo -e "${YELLOW}[WARN] ${NC}$1"
 }
 
 
-# Check boot mode (UEFI only)
+##### Check if system is booted in UEFI mode
 check_boot_mode() {
-    log "Checking boot mode..."
-    if [ ! -d "/sys/firmware/efi" ]; then
-        error "This script only supports UEFI systems"
+    echo "Checking boot mode..."
+    if fw_size=$(cat /sys/firmware/efi/fw_platform_size 2>/dev/null); then
+        success "${fw_size}-bit UEFI detected"
+    else
+        error "System not booted in UEFI mode"
+        exit 1
     fi
-    success "UEFI system detected"
 }
 
-# Check if internet is working
+##### Check internet connection
 check_internet() {
-    log "Checking internet connection..."
-    if ! ping -c 1 -W 5 archlinux.org >/dev/null 2>&1; then
-        error "No internet connection"
+    MAX_ATTEMPTS=3  # Number of attempts to connect to the internet
+    WAIT_TIME=2     # Time to wait before retrying
+
+    echo "Checking internet connection... "
+
+    is_connected() {
+        ping -c 1 -W 5 archlinux.org >/dev/null 2>&1
+    }
+
+    if is_connected; then
+        success "Connected"
+    else
+        warning "No internet connection. Attempting to reconnect..."
+        # Try to connect multiple times
+        for ((i=1; i<=MAX_ATTEMPTS; i++)); do
+            echo -n "Attempt $i/$MAX_ATTEMPTS... "
+            sleep $WAIT_TIME  # Wait before retrying
+
+            if is_connected; then
+                success "Connected"
+                break
+            else
+                echo -e "${RED}Failed${NC}"
+            fi
+        done
+        error "No internet connection after $MAX_ATTEMPTS attempts"
+        exit 1
     fi
-    success "Internet connection is working"
 }
+
+
+##### Check system clock synchronization
+check_clock() {
+    MAX_ATTEMPTS=3  # Number of attempts to synchronize the clock
+    WAIT_TIME=1     # Time to wait before retrying
+
+    echo "Checking system clock synchronization... "
+
+    # Local function to check sync status
+    is_clock_synced() {
+        timedatectl show --property=NTPSynchronized --value | grep -q "yes"
+    }
+
+    if is_clock_synced; then
+        success "System clock is synchronized"
+    else
+        warning "System clock is not synchronized. Attempting to fix..."
+
+        # Try to sync multiple times
+        for ((i=1; i<=MAX_ATTEMPTS; i++)); do
+            echo -n "Attempt $i/$MAX_ATTEMPTS... "
+            timedatectl set-ntp true >/dev/null 2>&1
+            sleep $WAIT_TIME
+
+            if is_clock_synced; then
+                success "System clock successfully synchronized"
+                break
+            fi  
+
+            echo -e "${RED}Failed${NC}"
+        done
+        
+        error "Could not synchronize clock after $MAX_ATTEMPTS attempts"
+        exit 1
+    fi  
+}
+
 
 
 
@@ -321,36 +381,27 @@ EOF
 # Main Installation
 main() {
     clear
-    echo
-    echo
-    echo -e "${CYAN}###${NC}        Welcome to Arch Linux installation        ${CYAN}###${NC}"
+    echo -e "${CYAN}###${NC} Welcome to Arch Linux installation ${CYAN}###${NC}"
+    echo 
     echo -e "${RED}WARNING:${NC}  This script will ${RED}ERASE${NC} all data on the selected disk"
     echo -e "${YELLOW}ATENTION:${NC} This script doesn't support BIOS systems"
-    echo "Disk will be partitioned and formatted:"
+    echo
+    echo "This script will install the following partitions:"
     echo " * EFI partition: 1GB"
     echo " * SWAP partition: USER INPUT"
     echo " * ROOT partition: USER INPUT"
     echo " * HOME partition: REMAINING DISK SPACE"
     echo
-    echo
 
-    echo -e "${CYAN}###${NC}        Checking...        ${CYAN}###${NC}"
+ 
     check_boot_mode
     check_internet
+    check_clock
 
-    echo
-    echo
-    echo -e "${CYAN}###${NC}        Configuring disk...        ${CYAN}###${NC}"
-    prepare_disk
+   prepare_disk
 
-    echo
-    echo
-    echo -e "${CYAN}###${NC}        Installing base system...        ${CYAN}###${NC}"
     install_base
 
-    echo
-    echo
-    echo -e "${CYAN}###${NC}        Configuring system...        ${CYAN}###${NC}"
     configure_system
 
 }
