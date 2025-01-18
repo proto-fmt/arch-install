@@ -35,7 +35,7 @@ info() {
 success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
     log "SUCCESS: $1"
-}
+} 
 
 warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
