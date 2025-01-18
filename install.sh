@@ -117,7 +117,7 @@ prepare_disk() {
         BOOT_SIZE=1
     else
         BOOT_SIZE=0.5
-    fi
+    fi 
     
     AVAILABLE_SIZE=$(echo "scale=2; $DISK_SIZE_GB - $BOOT_SIZE" | bc)
     
